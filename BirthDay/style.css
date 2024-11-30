@@ -1,0 +1,27 @@
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh; /* 保證頁面高度為視口高度 */
+    background-image: url('星空.jpeg'); /* 替換為您的背景圖片路徑 */
+    background-size: cover;
+    background-position: center center;
+    background-attachment: fixed; /* 背景圖片固定 */
+    overflow: hidden;
+}
+
+#canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: auto;
+}
+
+.left-bottom-image {
+    position: absolute;
+    bottom: 10px; /* 距離頁面底部 10px */
+    left: 10px; /* 距離頁面左側 10px */
+    width: 150px; /* 您的圖片寬度 */
+    height: auto; /* 根據寬度自動調整高度 */
+    z-index: 10; /* 確保圖片在最上層 */
+}

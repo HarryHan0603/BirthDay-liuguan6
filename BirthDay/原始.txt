@@ -1,0 +1,279 @@
+// 瀏覽器兼容的 requestAnimationFrame 方法
+window.requestAnimationFrame = (function () {
+    return (
+        window.requestAnimationFrame ||
+        window.webkitRequestAnimationFrame ||
+        window.mozRequestAnimationFrame ||
+        function (callback) {
+            window.setTimeout(callback, 1000 / 60);
+        }
+    );
+})();
+
+// 獲取畫布元素
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+let cw = window.innerWidth;
+let ch = window.innerHeight;
+canvas.width = cw;
+canvas.height = ch;
+
+// 全局變數
+let fireworks = [];
+let particles = [];
+let hue = 120;
+let limiterTotal = 5;
+let limiterTick = 0;
+let timerTotal = 5;
+let timerTick = 0;
+let maxFireworks = 1;
+let isFirstFirework = true; // 標記是否是第一個煙火
+let mousedown = false;
+let mx, my;
+let fireworksStarted = false; // 用來標記是否開始煙火發射
+let showText = false; // 控制文字顯示
+let displayText = "生日快樂🎂🎊"; // 控制顯示的文字
+let textOpacity = 1; // 控制文字的透明度，實現漸變消失
+
+// 隨機數函數
+function random(min, max) {
+    return Math.random() * (max - min) + min;
+}
+
+// 計算兩點間距離
+function calculateDistance(p1x, p1y, p2x, p2y) {
+    const xDistance = p1x - p2x;
+    const yDistance = p1y - p2y;
+    return Math.sqrt(Math.pow(xDistance, 2) + Math.pow(yDistance, 2));
+}
+
+// 煙火類
+function Firework(sx, sy, tx, ty, slow = false) {
+    this.x = sx;
+    this.y = sy;
+    this.sx = sx;
+    this.sy = sy;
+    this.tx = tx;
+    this.ty = ty;
+    this.distanceToTarget = calculateDistance(sx, sy, tx, ty);
+    this.distanceTraveled = 0;
+    this.coordinates = [];
+    this.coordinateCount = 5;
+    while (this.coordinateCount--) {
+        this.coordinates.push([this.x, this.y]);
+    }
+    this.angle = Math.atan2(ty - sy, tx - sx);
+    this.speed = slow ? 0.5 : 1.5; // 第一個煙火速度更慢，後續正常
+    this.acceleration = slow ? 1.01 : 1.03; // 第一個煙火加速更輕微，後續正常
+    this.brightness = random(50, 70);
+    this.targetRadius = 1;
+}
+
+// 更新煙火狀態
+Firework.prototype.update = function (index) {
+    this.coordinates.pop();
+    this.coordinates.unshift([this.x, this.y]);
+
+    if (this.targetRadius < 8) {
+        this.targetRadius += 0.3;
+    } else {
+        this.targetRadius = 1;
+    }
+
+    this.speed *= this.acceleration;
+    const vx = Math.cos(this.angle) * this.speed;
+    const vy = Math.sin(this.angle) * this.speed;
+    this.distanceTraveled = calculateDistance(this.sx, this.sy, this.x + vx, this.y + vy);
+
+    if (this.distanceTraveled >= this.distanceToTarget) {
+        createParticles(this.tx, this.ty);
+        fireworks.splice(index, 1);
+    } else {
+        this.x += vx;
+        this.y += vy;
+    }
+};
+
+// 繪製煙火
+Firework.prototype.draw = function () {
+    ctx.beginPath();
+    ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+    ctx.lineTo(this.x, this.y);
+    ctx.strokeStyle = `hsl(${hue}, 100%, ${this.brightness}%)`;
+    ctx.stroke();
+};
+
+// 粒子類
+function Particle(x, y) {
+    this.x = x;
+    this.y = y;
+    this.coordinates = [];
+    this.coordinateCount = 5;
+    while (this.coordinateCount--) {
+        this.coordinates.push([this.x, this.y]);
+    }
+    this.angle = random(0, Math.PI * 2);
+    this.speed = random(1, 10);
+    this.friction = 0.97;
+    this.gravity = 0.5;
+    this.hue = random(hue - 50, hue + 50);
+    this.brightness = random(50, 80);
+    this.alpha = 1;
+    this.decay = random(0.01, 0.02);
+}
+
+// 更新粒子狀態
+Particle.prototype.update = function (index) {
+    this.coordinates.pop();
+    this.coordinates.unshift([this.x, this.y]);
+    this.speed *= this.friction;
+    this.x += Math.cos(this.angle) * this.speed;
+    this.y += Math.sin(this.angle) * this.speed + this.gravity;
+    this.alpha -= this.decay;
+
+    if (this.alpha <= this.decay) {
+        particles.splice(index, 1);
+    }
+};
+
+// 繪製粒子
+Particle.prototype.draw = function () {
+    ctx.beginPath();
+    ctx.moveTo(this.coordinates[this.coordinates.length - 1][0], this.coordinates[this.coordinates.length - 1][1]);
+    ctx.lineTo(this.x, this.y);
+    ctx.strokeStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.alpha})`;
+    ctx.stroke();
+};
+
+// 創建粒子群
+function createParticles(x, y) {
+    let particleCount = 200;
+    while (particleCount--) {
+        particles.push(new Particle(x, y));
+    }
+}
+
+// 繪製文字 "新年快樂"
+function renderText() {
+    ctx.fillStyle = `rgba(255, 255, 255, ${textOpacity})`; // 使用透明度實現漸變消失
+    // 將中文字設為「粉圓體」，英文設為「Times New Roman」
+    ctx.font = "80px 'DFKai-SB', ' sans-serif', Times New Roman"; // 修改字體，粉圓體對應標準字體名稱可能不同
+
+    ctx.textAlign = "center"; // 文字居中對齊
+    ctx.fillText(displayText, canvas.width / 2, canvas.height / 2 + 200); // 將文字稍微向下
+}
+
+
+
+// 動畫主循環
+function loop() {
+    requestAnimationFrame(loop);
+
+    hue = random(0, 360);
+
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, cw, ch);
+
+    ctx.globalCompositeOperation = 'lighter';
+
+    let i = fireworks.length;
+    while (i--) {
+        fireworks[i].draw();
+        fireworks[i].update(i);
+    }
+
+    i = particles.length;
+    while (i--) {
+        particles[i].draw();
+        particles[i].update(i);
+    }
+
+    // 顯示文字 "新年快樂" 或 "Happy New Year"
+    renderText();
+
+    // 確保煙火在 5 秒後才開始
+    if (fireworksStarted && timerTick >= timerTotal) {
+        let fireworkCount = 5; // 每次放 5 顆煙火
+        while (fireworkCount--) {
+            // 隨機生成煙火發射位置
+            let startX = random(0, cw); // 隨機生成 X 座標
+            let startY = random(ch * 0.5, ch); // 隨機生成 Y 座標，使煙火能從下半區域發射
+            if (isFirstFirework) {
+                fireworks.push(new Firework(startX, startY, random(0, cw), random(0, ch / 2), true));
+                isFirstFirework = false; // 只執行一次
+            } else {
+                fireworks.push(new Firework(startX, startY, random(0, cw), random(0, ch / 2)));
+            }
+        }
+        timerTick = 0;
+    } else {
+        timerTick++;
+    }
+
+    // 文字漸變消失的效果
+    if (textOpacity > 0) {
+        textOpacity -= 0.001; // 減少透明度
+    }
+}
+
+// 開始煙火的計時器
+setTimeout(() => {
+    fireworksStarted = true; // 5 秒後開始煙火
+}, 5000);
+
+// 設定 10 秒後更改文字
+setTimeout(() => {
+    displayText = "大學生活加油🔥"; // 10 秒後顯示英文
+}, 10000);
+
+// 設定文字消失過程
+setTimeout(() => {
+    textOpacity = 1; // 文字可見，並開始消失
+}, 10000);
+
+setTimeout(() => {
+    displayText = "㊗️妳之後所有科目都不會被當掉！"; // 20 秒後顯示英文
+}, 20000);
+
+
+setTimeout(() => {
+    displayText = "㊗️妳天天開心"; // 30 秒後顯示英文
+}, 30000);
+
+setTimeout(() => {
+    textOpacity = 1; // 文字可見，並開始消失
+}, 30000);
+
+setTimeout(() => {
+    displayText = "㊗️19歲快樂！"; // 40 秒後顯示英文
+}, 40000);
+
+setTimeout(() => {
+    displayText = "Happy BrithDay！🎊🎊"; // 40 秒後顯示英文
+}, 50000);
+
+setTimeout(() => {
+    textOpacity = 10; // 文字可見，並開始消失
+}, 50000);
+
+
+// 每隔一定時間放多顆煙火
+setInterval(() => {
+    if (!mousedown && fireworks.length < maxFireworks) {
+        let fireworkCount = 5; // 每次放 5 顆煙火
+        while (fireworkCount--) {
+            let startX = random(0, cw); // 隨機位置 X
+            let startY = random(ch * 0.5, ch); // 隨機位置 Y，讓煙火從下半部分發射
+            if (isFirstFirework) {
+                fireworks.push(new Firework(startX, startY, random(0, cw), random(0, ch / 2), true));
+                isFirstFirework = false; // 只執行一次
+            } else {
+                fireworks.push(new Firework(startX, startY, random(0, cw), random(0, ch / 2)));
+            }
+        }
+    }
+}, 1000); // 每 1 秒放 5 顆煙火
+
+// 啟動動畫
+window.onload = loop;
